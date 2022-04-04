@@ -3,6 +3,8 @@ import matplotlib.pyplot as plt
 from datetime import datetime
 from dateutil import parser
 import json
+import string
+import re
 import os
 
 
@@ -10,6 +12,7 @@ def saveData():
     names = []
     counts = []
     messageTimes = []
+    wordCounts = []
     with open('key') as f:
         key = json.load(f)
     with TelegramClient(key['name'], key['api_id'], key['api_hash']) as client:
@@ -17,21 +20,35 @@ def saveData():
         for dialog in dialogs:
             cnt = 0
             times = []
+            wordDict = {}
             if not dialog.is_user:
                 continue
             for message in client.iter_messages(dialog, limit=None):
                 cnt += 1
                 times.append(message.date.isoformat())
+                if not isinstance(message.text, str):
+                    continue
+                stringWithoutPunctuation = message.text.translate(str.maketrans('', '', '!\"#$%&\'()*+,./:;<=>?@[\]^_`{|}~'))#re.sub("[^\w\s]", "", message.text)
+                wordList = stringWithoutPunctuation.split()
+                for word in wordList:
+                    if len(word) <= 2:
+                        continue
+                    if word.lower() in wordDict:
+                        wordDict[word.lower()] += 1
+                    else:
+                        wordDict[word.lower()] = 1
             print(dialog.name, cnt)
             names.append(dialog.name)
             counts.append(cnt)
             messageTimes.append(times)
-    aux = sorted(zip(counts, names, messageTimes), reverse=True)
-    _counts = [x for x, y, z in aux]
-    _names = [y for x, y, z in aux]
-    _messageTimes = [z for x, y, z in aux]
+            wordCounts.append(wordDict)
+    aux = sorted(zip(counts, names, messageTimes, wordCounts), reverse=True)
+    _counts = [x for x, y, z, w in aux]
+    _names = [y for x, y, z, w in aux]
+    _messageTimes = [z for x, y, z, w in aux]
+    _wordCounts = [w for x, y, z, w in aux]
     with open('data', 'w') as f:
-        json.dump({'names': _names, 'counts': _counts, 'messageTimes': _messageTimes}, f)
+        json.dump({'names': _names, 'counts': _counts, 'messageTimes': _messageTimes, 'wordCounts': _wordCounts}, f)
 
 
 def readData():
@@ -63,7 +80,7 @@ def plotActivity(names, messageTimes, startDate, n_bins, threshold, filename):
     plt.savefig(filename + 'Log', dpi=200)
 
 
-def plotOnePersonActivity(names, messageTimes, nbins=50, threshold=300):
+def plotOnePersonActivity(names, messageTimes, nbins=50, threshold=1000):
     for i in range(len(names)):
         if len(messageTimes[i]) < threshold:
             continue
@@ -86,8 +103,8 @@ def plotCounts(names, counts, filename):
 
 
 if __name__ == '__main__':
-    if 'data' not in os.listdir('./'):  # checks if there is a file with the data already
-        saveData()
+    #if 'data' not in os.listdir('./'):  # checks if there is a file with the data already
+    #saveData()
 
     names, counts, messageTimes = readData()
 
